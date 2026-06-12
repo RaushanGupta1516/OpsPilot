@@ -1,16 +1,16 @@
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
-from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any
+import google.generativeai as genai
+import os
 import uuid
 
-# using in-memory qdrant for dev - no external service needed
-# TODO: switch to qdrant cloud for production
+# switched from sentence-transformers to gemini embeddings API
+# reason: sentence-transformers pulls torch (532MB) which kills render free tier
 _client = None
-_model = None
 
 COLLECTION_NAME = "failure_patterns"
-EMBEDDING_DIM = 384  # all-MiniLM-L6-v2 output size
+EMBEDDING_DIM = 768  # gemini text-embedding-004 output size
 
 
 def get_client() -> QdrantClient:
@@ -20,18 +20,14 @@ def get_client() -> QdrantClient:
     return _client
 
 
-def get_model() -> SentenceTransformer:
-    global _model
-    if _model is None:
-        print("[rag] loading embedding model...")
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
-        print("[rag] model loaded")
-    return _model
-
-
 def embed_text(text: str) -> List[float]:
-    model = get_model()
-    return model.encode(text).tolist()
+    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+    result = genai.embed_content(
+        model="models/text-embedding-004",
+        content=text,
+        task_type="retrieval_document",
+    )
+    return result["embedding"]
 
 
 def ensure_collection():
@@ -51,7 +47,6 @@ def upsert_pattern(pattern: Dict[str, Any]):
     client = get_client()
     ensure_collection()
 
-    # combine symptom + error signals for richer embedding
     text = f"{pattern['symptom']} {' '.join(pattern['error_signals'])}"
     vector = embed_text(text)
 
@@ -71,7 +66,15 @@ def search_patterns(query: str, top_k: int = 3) -> List[Dict[str, Any]]:
     client = get_client()
     ensure_collection()
 
-    vector = embed_text(query)
+    # use retrieval_query task type for search queries
+    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+    result = genai.embed_content(
+        model="models/text-embedding-004",
+        content=query,
+        task_type="retrieval_query",
+    )
+    vector = result["embedding"]
+
     results = client.search(
         collection_name=COLLECTION_NAME,
         query_vector=vector,

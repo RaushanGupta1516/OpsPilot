@@ -6,7 +6,6 @@ asyncpg
 httpx
 pydantic-settings
 psutil
-sentence-transformers
 qdrant-client
 langchain
 langchain-core
