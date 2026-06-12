@@ -1,0 +1,161 @@
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Environment {
+  production
+  staging
+  development
+}
+
+enum IncidentStatus {
+  open
+  resolved
+  ignored
+}
+
+enum ActionType {
+  restart_service
+  rollback_deploy
+  clear_connection_pool
+  notify_only
+  escalate
+}
+
+enum ActionStatus {
+  pending
+  approved
+  rejected
+  executed
+  failed
+}
+
+model App {
+  id              String      @id @default(uuid())
+  name            String
+  url             String
+  environment     Environment @default(production)
+  renderId        String?     // render service id, optional
+  baselineReady   Boolean     @default(false)
+  baselineHours   Int         @default(0) // tracks observation progress
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  metrics     Metric[]
+  baselines   Baseline[]
+  incidents   Incident[]
+
+  @@map("apps")
+}
+
+model Metric {
+  id             String   @id @default(uuid())
+  appId          String
+  endpoint       String   @default("/")
+  responseTimeMs Int?
+  statusCode     Int?
+  errorRate      Float    @default(0)
+  memoryMb       Float?
+  cpuPercent     Float?
+  isHealthy      Boolean  @default(true)
+  recordedAt     DateTime @default(now())
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  // index for time-series queries - we'll query by appId + recordedAt a lot
+  @@index([appId, recordedAt])
+  @@map("metrics")
+}
+
+model Baseline {
+  id          String   @id @default(uuid())
+  appId       String
+  endpoint    String   @default("/")
+  metricType  String   // response_time, error_rate, memory, cpu
+  hourOfDay   Int      // 0-23, for time-aware baselines
+  mean        Float
+  stdDev      Float
+  sampleCount Int      @default(0)
+  calculatedAt DateTime @default(now())
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, endpoint, metricType, hourOfDay])
+  @@map("baselines")
+}
+
+model Incident {
+  id           String         @id @default(uuid())
+  appId        String
+  severity     Int            // 1-5
+  status       IncidentStatus @default(open)
+  rootCause    String?
+  causalChain  Json?          // array of strings
+  confidence   Float?
+  fingerprint  String?        // for deduplication
+  startedAt    DateTime       @default(now())
+  resolvedAt   DateTime?
+  durationSecs Int?
+
+  app         App          @relation(fields: [appId], references: [id], onDelete: Cascade)
+  actions     Action[]
+  postmortem  Postmortem?
+
+  @@index([appId, startedAt])
+  @@index([fingerprint])        // dedup lookups
+  @@map("incidents")
+}
+
+model Action {
+  id          String       @id @default(uuid())
+  incidentId  String
+  actionType  ActionType
+  status      ActionStatus @default(pending)
+  proposedAt  DateTime     @default(now())
+  decidedAt   DateTime?
+  executedAt  DateTime?
+  executedBy  String?      // "human" or "auto"
+  notes       String?
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@map("actions")
+}
+
+model Postmortem {
+  id                     String   @id @default(uuid())
+  incidentId             String   @unique
+  timeline               Json     // array of {time, event} objects
+  rootCauseAnalysis      String
+  impactDurationSecs     Int?
+  fixApplied             String?
+  permanentRecommendation String?
+  codeSnippet            String?
+  generatedAt            DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@map("postmortems")
+}
+
+// this table is managed by langgraph AsyncPostgresSaver
+// don't write to it manually
+model AgentCheckpoint {
+  threadId     String   @map("thread_id")
+  checkpointId String   @map("checkpoint_id")
+  parentId     String?  @map("parent_id")
+  type         String?
+  checkpoint   Json?
+  metadata     Json?
+
+  @@id([threadId, checkpointId])
+  @@map("checkpoints")
+}
