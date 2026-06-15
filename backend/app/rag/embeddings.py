@@ -1,12 +1,11 @@
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from typing import List, Dict, Any
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import os
 import uuid
 
-# switched from sentence-transformers to gemini embeddings API
-# reason: sentence-transformers pulls torch (532MB) which kills render free tier
 _client = None
 
 COLLECTION_NAME = "failure_patterns"
@@ -20,14 +19,18 @@ def get_client() -> QdrantClient:
     return _client
 
 
+def get_genai_client():
+    return genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+
 def embed_text(text: str) -> List[float]:
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    result = genai.embed_content(
-        model="models/text-embedding-004",
-        content=text,
-        task_type="retrieval_document",
+    client = get_genai_client()
+    result = client.models.embed_content(
+        model="text-embedding-004",
+        contents=text,
+        config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
     )
-    return result["embedding"]
+    return result.embeddings[0].values
 
 
 def ensure_collection():
@@ -66,14 +69,13 @@ def search_patterns(query: str, top_k: int = 3) -> List[Dict[str, Any]]:
     client = get_client()
     ensure_collection()
 
-    # use retrieval_query task type for search queries
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    result = genai.embed_content(
-        model="models/text-embedding-004",
-        content=query,
-        task_type="retrieval_query",
+    genai_client = get_genai_client()
+    result = genai_client.models.embed_content(
+        model="text-embedding-004",
+        contents=query,
+        config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
     )
-    vector = result["embedding"]
+    vector = result.embeddings[0].values
 
     results = client.search(
         collection_name=COLLECTION_NAME,
