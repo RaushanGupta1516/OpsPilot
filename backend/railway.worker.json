@@ -4,7 +4,7 @@
     "buildCommand": "pip install -r requirements.txt && prisma generate && prisma py fetch"
   },
   "deploy": {
-    "startCommand": "celery -A app.workers.celery_app worker --loglevel=info --pool=solo",
+    "startCommand": "celery -A app.workers.celery_app worker --beat --loglevel=info --pool=solo",
     "restartPolicyType": "ON_FAILURE"
   }
 }
