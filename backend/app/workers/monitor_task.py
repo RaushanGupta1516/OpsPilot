@@ -2,7 +2,8 @@ import asyncio
 import httpx
 from app.workers.celery_app import celery_app
 
-API_BASE = "http://localhost:8000"
+import os
+API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
 # anomaly thresholds - will use learned baselines once available
 RESPONSE_TIME_THRESHOLD = 3000  # ms
