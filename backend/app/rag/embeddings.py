@@ -20,9 +20,9 @@ def get_client() -> QdrantClient:
 
 def embed_text(text: str) -> List[float]:
     api_key = os.environ["GEMINI_API_KEY"]
-    url = f"https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-embedding-001:embedContent?key={api_key}"
     payload = {
-        "model": "models/text-embedding-004",
+        "model": "models/gemini-embedding-001",
         "content": {"parts": [{"text": text}]},
         "taskType": "RETRIEVAL_DOCUMENT",
     }
@@ -33,9 +33,9 @@ def embed_text(text: str) -> List[float]:
 
 def embed_query(text: str) -> List[float]:
     api_key = os.environ["GEMINI_API_KEY"]
-    url = f"https://generativelanguage.googleapis.com/v1/models/text-embedding-004:embedContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-embedding-001:embedContent?key={api_key}"
     payload = {
-        "model": "models/text-embedding-004",
+        "model": "models/gemini-embedding-001",
         "content": {"parts": [{"text": text}]},
         "taskType": "RETRIEVAL_QUERY",
     }
