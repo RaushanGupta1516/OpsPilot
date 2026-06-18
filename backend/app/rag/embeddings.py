@@ -25,6 +25,7 @@ def embed_text(text: str) -> List[float]:
         "model": "models/gemini-embedding-001",
         "content": {"parts": [{"text": text}]},
         "taskType": "RETRIEVAL_DOCUMENT",
+        "outputDimensionality": EMBEDDING_DIM,
     }
     response = httpx.post(url, json=payload, timeout=30)
     response.raise_for_status()
@@ -38,6 +39,7 @@ def embed_query(text: str) -> List[float]:
         "model": "models/gemini-embedding-001",
         "content": {"parts": [{"text": text}]},
         "taskType": "RETRIEVAL_QUERY",
+        "outputDimensionality": EMBEDDING_DIM,
     }
     response = httpx.post(url, json=payload, timeout=30)
     response.raise_for_status()
