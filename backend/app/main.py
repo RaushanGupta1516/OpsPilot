@@ -1,4 +1,4 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+\from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
@@ -81,6 +81,11 @@ class AgentTriggerInternal(BaseModel):
 @app.post("/internal/broadcast-metric")
 async def broadcast_metric(payload: MetricBroadcast):
     await ws_manager.broadcast_metric(payload.app_id, payload.app_name, payload.metric)
+
+    is_healthy = payload.metric.get("is_healthy", True)
+    message = payload.metric.get("message", "")
+    await ws_manager.broadcast_health(payload.app_id, payload.app_name, is_healthy, message)
+
     return {"ok": True}
 
 

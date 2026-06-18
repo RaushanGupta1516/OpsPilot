@@ -44,6 +44,14 @@ class WebSocketManager:
             "metric": metric,
         })
 
+    async def broadcast_health(self, app_id: str, app_name: str, is_healthy: bool, message: str = ""):
+        await self.broadcast("health_update", {
+            "app_id": app_id,
+            "app_name": app_name,
+            "is_healthy": is_healthy,
+            "message": message,
+        })
+
     async def broadcast_approval_request(self, thread_id: str, incident_data: dict):
         await self.broadcast("approval_request", {
             "thread_id": thread_id,
