@@ -5,7 +5,7 @@ from app.workers.celery_app import celery_app
 import os
 API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
-# anomaly thresholds - will use learned baselines once available
+# fallback thresholds - used only until an app has a learned baseline
 RESPONSE_TIME_THRESHOLD = 3000  # ms
 ERROR_RATE_THRESHOLD = 0.05
 
@@ -55,16 +55,37 @@ async def _async_monitoring_cycle():
                     response_time = result.get("response_time_ms") or 0
                     error_rate = result.get("error_rate", 0)
 
-                    # detect anomaly
-                    anomaly_detected = (
-                        not is_healthy or
-                        response_time > RESPONSE_TIME_THRESHOLD or
-                        error_rate > ERROR_RATE_THRESHOLD
+                    # ask baseline service whether this is an anomaly —
+                    # uses learned per-hour baselines once an app has 48h of
+                    # data, falls back to fixed thresholds until then
+                    anomaly_resp = await client.post(
+                        f"{API_BASE}/internal/check-anomaly",
+                        json={
+                            "app_id": app["id"],
+                            "response_time_ms": response_time,
+                            "error_rate": error_rate,
+                            "is_healthy": is_healthy,
+                        }
                     )
 
-                    if anomaly_detected:
+                    if anomaly_resp.status_code == 200:
+                        anomaly_data = anomaly_resp.json()
+                        anomaly_detected = anomaly_data.get("is_anomaly", False)
+                        reason = anomaly_data.get("reason", "anomaly detected")
+                        using_baseline = anomaly_data.get("using_baseline", False)
+                    else:
+                        # baseline service unreachable - fall back to inline check
+                        anomaly_detected = (
+                            not is_healthy or
+                            response_time > RESPONSE_TIME_THRESHOLD or
+                            error_rate > ERROR_RATE_THRESHOLD
+                        )
                         reason = _build_anomaly_reason(is_healthy, response_time, error_rate)
-                        print(f"[monitor] ⚠️ anomaly on {app['name']}: {reason}")
+                        using_baseline = False
+
+                    if anomaly_detected:
+                        tag = "[baseline]" if using_baseline else "[default]"
+                        print(f"[monitor] ⚠️ {tag} anomaly on {app['name']}: {reason}")
 
                         # trigger agent
                         await client.post(

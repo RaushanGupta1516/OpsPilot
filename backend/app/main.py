@@ -12,6 +12,7 @@ from app.api.rag import router as rag_router
 from app.api.agent import router as agent_router
 from app.rag.ingestor import ingest_knowledge_base
 from app.core.websocket_manager import ws_manager
+from app.services.baseline_service import update_baseline_progress, check_anomaly
 
 
 @asynccontextmanager
@@ -78,6 +79,13 @@ class AgentTriggerInternal(BaseModel):
     anomaly_reason: str = ""
 
 
+class AnomalyCheckRequest(BaseModel):
+    app_id: str
+    response_time_ms: int
+    error_rate: float
+    is_healthy: bool
+
+
 @app.post("/internal/broadcast-metric")
 async def broadcast_metric(payload: MetricBroadcast):
     await ws_manager.broadcast_metric(payload.app_id, payload.app_name, payload.metric)
@@ -87,6 +95,25 @@ async def broadcast_metric(payload: MetricBroadcast):
     await ws_manager.broadcast_health(payload.app_id, payload.app_name, is_healthy, message)
 
     return {"ok": True}
+
+
+@app.post("/internal/check-anomaly")
+async def check_anomaly_internal(payload: AnomalyCheckRequest):
+    await update_baseline_progress(payload.app_id)
+
+    if not payload.is_healthy:
+        return {
+            "is_anomaly": True,
+            "reason": "service unreachable",
+            "using_baseline": False,
+        }
+
+    result = await check_anomaly(
+        payload.app_id,
+        payload.response_time_ms,
+        payload.error_rate,
+    )
+    return result
 
 
 @app.post("/internal/trigger-agent")
