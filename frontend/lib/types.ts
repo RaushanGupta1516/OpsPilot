@@ -76,6 +76,7 @@ export interface AgentRunResult {
 export type WSMessageType =
   | "agent_event"
   | "metric_update"
+  | "health_update"
   | "approval_request"
   | "pong";
 
@@ -103,8 +104,8 @@ export interface WSAgentUpdateData {
 }
 
 export interface WSHealthUpdateData {
-  appId: string;
-  appName: string;
-  status: AppStatus;
-  responseTime: number | null;
+  app_id: string;
+  app_name: string;
+  is_healthy: boolean;
+  message: string;
 }

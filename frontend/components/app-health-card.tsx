@@ -50,9 +50,8 @@ export function AppHealthCard({ app, responseTime: initialRt }: Props) {
 		"health_update",
 		(raw) => {
 			const d = raw as WSHealthUpdateData;
-			if (d.appId === app.id) {
-				setStatus(d.status);
-				if (d.responseTime !== null) setRt(d.responseTime);
+			if (d.app_id === app.id) {
+				setStatus(d.is_healthy ? "healthy" : "down");
 			}
 		},
 		[app.id],
